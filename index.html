@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
+    <title>AW119 MKII IDS - Simulador Final</title>
+    <style>
+        /* --- PALETE DE CORES DO COCKPIT AW119Ke IDS --- */
+        :root {
+            --edu-bg: #000000;
+            --edu-green: #00ff00;
+            --edu-cyan: #00ffff;
+            --edu-white: #ffffff;
+            --edu-red: #ff0000;
+            --edu-amber: #ffbf00;
+            --bezel-bg: #1a1a1a;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        html, body { 
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #050505; 
+            color: var(--edu-green); 
+            font-family: 'Courier New', Courier, monospace; 
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-transform: uppercase;
+        }
+
+        /* --- A MOLDURA (BEZEL) --- */
+        .edu-bezel {
+            width: 100%;
+            max-width: 1200px;
+            height: 100%;
+            max-height: 750px;
+            background: var(--bezel-bg);
+            border: 4px solid #000;
+            border-radius: 20px;
+            box-shadow: inset 0 0 20px #000, 0 10px 50px rgba(0,0,0,0.9);
+            display: flex;
+            position: relative;
+            padding: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .edu-bezel { border-radius: 0; padding: 0; border: none; max-height: 100%; }
+        }
+
+        /* --- BOTÕES LATERAIS (DESKTOP) --- */
+        .bezel-nav { display: flex; flex-direction: column; justify-content: space-around; width: 70px; padding: 20px 0; z-index: 100; }
+        @media (max-width: 1024px) { .bezel-nav { display: none; } }
+
+        .btn-wrapper { display: flex; align-items: center; gap: 10px; position: relative; cursor: pointer; }
+        .btn-wrapper.right { flex-direction: row-reverse; }
+
+        .bezel-btn { width: 30px; height: 50px; background: #111; border: 2px solid #000; border-radius: 5px; box-shadow: inset 2px 2px 5px rgba(255,255,255,0.1), inset -2px -2px 5px rgba(0,0,0,0.8); transition: 0.1s; pointer-events: none; }
+        .btn-wrapper:active .bezel-btn { box-shadow: inset 2px 2px 10px rgba(0,0,0,0.9); transform: scale(0.95); }
+        .btn-label { color: #555; font-size: 15px; font-weight: bold; pointer-events: none; }
+        .btn-wrapper.active .btn-label { color: var(--edu-white); text-shadow: 0 0 8px rgba(255,255,255,0.8); }
+
+        /* --- O ECRÃ (DISPLAY) --- */
+        .edu-screen { flex-grow: 1; background: var(--edu-bg); border: 2px solid #222; border-radius: 4px; margin: 0 15px; position: relative; overflow: hidden; display: flex; flex-direction: column; box-shadow: inset 0 0 50px rgba(0,255,0,0.05); }
+        @media (max-width: 1024px) { .edu-screen { margin: 0; padding-bottom: calc(60px + var(--safe-bottom)); border: none; border-radius: 0; } }
+
+        /* Efeito Scanline CRT/LCD */
+        .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%); background-size: 100% 4px; pointer-events: none; z-index: 50; opacity: 0.5; }
+
+        /* --- LAYOUT DO ECRÃ --- */
+        .screen-top-bar { height: 40px; border-bottom: 2px solid #222; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; font-size: 14px; color: var(--edu-white); background: rgba(0,255,0,0.05); flex-shrink: 0;}
+        .screen-content { display: flex; flex-grow: 1; overflow: hidden; position: relative; z-index: 10; }
+        @media (max-width: 768px) { .screen-content { flex-direction: column; } }
+
+        /* --- PAINEL EDU ESQUERDO --- */
+        .left-panel { width: clamp(260px, 30vw, 330px); border-right: 2px solid #222; padding: 15px; background: rgba(0,0,0,0.6); overflow-y: auto; flex-shrink: 0; -webkit-overflow-scrolling: touch;}
+        @media (max-width: 768px) { .left-panel { width: 100%; border-right: none; border-bottom: 2px solid #222; max-height: 40vh; padding: 10px; } }
+        
+        .edu-layout { display: flex; flex-direction: column; gap: 10px; }
+        .edu-cas { min-height: 80px; border: 2px solid #333; background: #050505; display: flex; flex-direction: column; padding: 5px; gap: 5px; }
+        .edu-cas-msg { font-size: 18px; font-weight: bold; text-align: center; padding: 6px; letter-spacing: 1px; }
+        .edu-cas-msg.red { color: #000; background-color: var(--edu-red); animation: blink 0.6s infinite; }
+        .edu-cas-msg.amber { color: #000; background-color: var(--edu-amber); animation: blink 0.8s infinite; }
+        .edu-cas-msg.cyan { color: #000; background-color: var(--edu-cyan); }
+        
+        .edu-section { border: 2px solid #222; background: #0a0a0a; padding: 10px; border-radius: 4px; }
+        .edu-title { color: #666; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid #222; padding-bottom: 4px; letter-spacing: 1px; }
+        .edu-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .edu-lbl { color: var(--edu-white); font-size: 15px; display: flex; align-items: center; }
+        .edu-val { color: var(--edu-green); font-weight: bold; font-size: clamp(16px, 2vw, 22px); text-shadow: 0 0 5px rgba(0,255,0,0.3); }
+        .edu-val.red { color: var(--edu-red); text-shadow: 0 0 10px rgba(255,0,0,0.6); }
+        .edu-val.amber { color: var(--edu-amber); text-shadow: 0 0 10px rgba(255,191,0,0.6); }
+        .edu-val.cyan { color: var(--edu-cyan); text-shadow: 0 0 10px rgba(0,255,255,0.6); }
+
+        /* --- PAINEL DIREITO (CHECKLISTS) --- */
+        .right-panel { flex-grow: 1; padding: 25px; overflow-y: auto; position: relative; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 768px) { .right-panel { padding: 15px; padding-bottom: 30px; } }
+
+        /* --- CAIXAS DE AÇÃO (IMEDIATA E REDUNDÂNCIA) --- */
+        .pilot-action { background: rgba(0, 255, 255, 0.05); border-left: 5px solid var(--edu-cyan); padding: 15px; margin-bottom: 20px; color: var(--edu-white); font-size: 14px; line-height: 1.6; }
+        .pilot-action strong { font-size: 15px; display: flex; align-items: center; margin-bottom: 8px; letter-spacing: 1px; }
+        .pilot-action.red { background: rgba(255, 0, 0, 0.08); border-left-color: var(--edu-red); }
+        .pilot-action.red strong { color: var(--edu-red); }
+        .pilot-action.amber { background: rgba(255, 191, 0, 0.08); border-left-color: var(--edu-amber); }
+        .pilot-action.amber strong { color: var(--edu-amber); }
+        .pilot-action.redundancy { background: rgba(255, 255, 255, 0.05); border-left-color: #aaa; margin-top: -5px; }
+        .pilot-action.redundancy strong { color: #ccc; }
+
+        .sec-title { color: var(--edu-cyan); font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid var(--edu-cyan); padding-bottom: 5px; font-weight: bold; }
+        .sec-title.red { color: var(--edu-red); border-color: var(--edu-red); }
+        .sec-title.amber { color: var(--edu-amber); border-color: var(--edu-amber); }
+
+        /* --- TEXTOS E LISTAS BILINGUES --- */
+        .checklist { list-style: none; margin-bottom: 30px; }
+        .checklist li { display: flex; flex-direction: column; margin-bottom: 15px; }
+        
+        .cl-row { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; font-size: 16px; }
+        .cl-item { color: var(--edu-white); display: flex; align-items: center; flex-grow: 1; font-weight: bold; flex-wrap: wrap; }
+        .cl-item::after { content: ''; flex-grow: 1; border-bottom: 1px dotted #555; margin: 0 10px; position: relative; top: -5px; min-width: 20px; }
+        .cl-action { color: var(--edu-green); font-weight: bold; white-space: nowrap; }
+        .cl-action.red { color: var(--edu-red); }
+        .cl-action.amber { color: var(--edu-amber); }
+        .cl-action.cyan { color: var(--edu-cyan); }
+
+        .cl-pt { font-size: 12px; color: #888; text-transform: none; margin-top: 4px; font-family: sans-serif; }
+        .info-text { color: var(--edu-green); font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+
+        /* --- BOTÃO DE DÚVIDA (?) E [R] --- */
+        .btn-group { display: inline-flex; gap: 5px; margin-left: 10px; }
+        .help-btn { display: inline-flex; justify-content: center; align-items: center; width: 24px; height: 24px; background: rgba(0,255,255,0.1); border: 1px solid var(--edu-cyan); color: var(--edu-cyan); border-radius: 5px; font-size: 14px; font-weight: bold; cursor: pointer; margin-left: 10px; transition: 0.2s; font-family: sans-serif; flex-shrink: 0; outline: none; }
+        .help-btn:active { background: var(--edu-cyan); color: #000; transform: scale(0.9); }
+        .help-btn.red { border-color: var(--edu-red); color: var(--edu-red); background: rgba(255,0,0,0.1); }
+        .help-btn.red:active { background: var(--edu-red); color: #fff; }
+        .help-btn.amber { border-color: var(--edu-amber); color: var(--edu-amber); background: rgba(255,191,0,0.1); }
+        .help-btn.amber:active { background: var(--edu-amber); color: #000; }
+        .help-btn.redundancy { border-color: #aaa; color: #aaa; background: rgba(255,255,255,0.05); }
+        .help-btn.redundancy:active { background: #aaa; color: #000; }
+        
+        .edu-help { border-radius: 50%; width: 20px; height: 20px; font-size: 12px; margin-left: 8px; }
+
+        /* --- VISÃO GERAL (OVERLAY DE ENTRADA) --- */
+        .overview-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #080808; z-index: 3000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; color: var(--edu-white); transition: opacity 0.3s ease; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .overview-overlay.hidden { opacity: 0; pointer-events: none; }
+        .overview-overlay h2 { color: var(--edu-cyan); font-size: 22px; margin-bottom: 20px; letter-spacing: 1px; }
+        .panel-diagram { display: flex; gap: 10px; margin-bottom: 20px; width: 100%; max-width: 800px; justify-content: center; flex-wrap: wrap; }
+        .diagram-box { flex: 1; min-width: 100px; padding: 15px 5px; border: 2px solid #333; background: #111; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px; font-weight: bold; color: #555; }
+        .diagram-box small { font-size: 10px; font-weight: normal; margin-top: 5px; color: #888; }
+        .diagram-box span { font-size: 10px; color: #000; background: var(--edu-cyan); padding: 4px; border-radius: 8px; margin-top: 10px; display: none; font-weight: bold;}
+        .diagram-box.highlight { border-color: var(--edu-cyan); color: var(--edu-cyan); background: rgba(0,255,255,0.05); box-shadow: 0 0 20px rgba(0,255,255,0.1); }
+        .diagram-box.highlight span { display: block; }
+        .start-btn { background: var(--edu-cyan); color: #000; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; font-family: 'Courier New', monospace; width: 100%; max-width: 300px; outline: none; }
+        .start-btn:active { transform: scale(0.95); }
+
+        /* --- MODAL DE AJUDA --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 4000; display: none; justify-content: center; align-items: center; padding: 20px; opacity: 0; transition: opacity 0.2s; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal-box { background: #111; border: 2px solid var(--edu-cyan); border-radius: 10px; padding: 20px; max-width: 450px; width: 100%; box-shadow: 0 0 30px rgba(0,255,255,0.2); text-transform: none; font-family: sans-serif; position: relative; max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch;}
+        
+        .modal-box.redundancy-theme { border-color: #aaa; box-shadow: 0 0 30px rgba(255,255,255,0.1); }
+        .modal-box.redundancy-theme h3 { color: #fff; border-bottom-color: #444; }
+        .modal-box.redundancy-theme .modal-close { background: #555; color: #fff; }
+
+        .modal-box h3 { color: var(--edu-cyan); margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; font-family: 'Courier New', monospace; text-transform: uppercase; font-size: 18px;}
+        .modal-box p { color: #ddd; font-size: 15px; line-height: 1.5; margin-bottom: 20px; white-space: pre-line; }
+        .modal-close { background: var(--edu-cyan); color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; font-size: 15px; outline: none; }
+        .modal-close:active { transform: scale(0.98); }
+
+        /* Visibilidade das seções */
+        .section { display: none; animation: fadeIn 0.2s; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* --- BARRA MÓVEL INFERIOR --- */
+        .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; height: calc(60px + var(--safe-bottom)); background: #0a0a0a; border-top: 2px solid #333; display: none; align-items: stretch; padding-bottom: var(--safe-bottom); z-index: 1000; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 1024px) { .mobile-nav { display: flex; } }
+        .mobile-nav::-webkit-scrollbar { display: none; }
+        
+        .mob-btn { 
+            flex: 1; min-width: 65px; 
+            background: transparent; border: none; border-bottom: 4px solid transparent; 
+            color: #666; font-size: 14px; font-weight: bold; 
+            cursor: pointer; transition: 0.1s; 
+            font-family: inherit; outline: none; padding: 0 5px;
+        }
+        .mob-btn:active { background: rgba(255,255,255,0.05); }
+        .mob-btn.active { color: var(--edu-white); border-bottom-color: var(--edu-white); background: rgba(255,255,255,0.08); }
+
+        @media (max-width: 480px) {
+    .screen-top-bar {font-size:12px;padding:0 8px;}
+    .edu-cas-msg {font-size:15px;}
+    .sec-title {font-size:15px;}
+    .pilot-action {font-size:13px;padding:12px;}
+    .help-btn {width:22px;height:22px;font-size:12px;}
+    .mob-btn {min-width:55px;font-size:12px;}
+    .cl-item::after {display:none;}
+    .cl-row {flex-direction:column;align-items:flex-start;gap:5px;}
+    .cl-action {margin-left:28px;}
+}
+@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<!-- TELA DE VISÃO GERAL (OVERLAY) -->
+<div id="overview" class="overview-overlay">
+    <h2>VISÃO GERAL AW119 MKII</h2>
+    <div class="panel-diagram">
+        <div class="diagram-box">PFD<br><small>Primary Flight</small></div>
+        <div class="diagram-box highlight">EDU 1<br><small>Electronic Display</small><span>FOCO DO SIMULADOR</span></div>
+        <div class="diagram-box">EDU 2<br><small>Reversionário</small></div>
+    </div>
+    <p style="max-width: 800px; line-height: 1.5; color: #aaa; margin-bottom: 20px; font-family: sans-serif; text-transform: none; font-size: 14px; padding: 0 10px;">
+        O helicóptero AW119 dispõe de um Sistema Integrado de Ecrãs (IDS). As falhas geram alertas (CAS) no topo do ecrã EDU.<br><br>
+        <strong>NOVIDADE:</strong> Utilize os botões <strong>[ ? ]</strong> para detalhes operacionais e <strong>[ R ]</strong> para as verificações de redundância (Cross-check e Load Shedding).
+    </p>
+    <button class="start-btn" onclick="startSimulator()">INICIAR SIMULADOR</button>
+</div>
+
+<div class="edu-bezel">
+    <!-- BOTÕES BEZEL ESQUERDOS -->
+    <div class="bezel-nav">
+        <div class="btn-wrapper active" id="desk-0" onclick="navTo('home', 0)"><div class="bezel-btn"></div><span class="btn-label">SYS</span></div>
+        <div class="btn-wrapper" id="desk-1" onclick="navTo('engine', 1)"><div class="bezel-btn"></div><span class="btn-label">ENG</span></div>
+        <div class="btn-wrapper" id="desk-2" onclick="navTo('fire', 2)"><div class="bezel-btn"></div><span class="btn-label">FIR</span></div>
+        <div class="btn-wrapper" id="desk-3" onclick="navTo('fuel', 3)"><div class="bezel-btn"></div><span class="btn-label">FUL</span></div>
+    </div>
+
+    <!-- ECRÃ PRINCIPAL -->
+    <div class="edu-screen">
+        <div class="scanlines"></div>
+        <div class="screen-top-bar">
+            <span>EMERGENCY CHECKLIST</span>
+            <span style="color: var(--edu-cyan);">AW119 MKII</span>
+        </div>
+        <div class="screen-content">
+            
+            <!-- PAINEL EDU DINÂMICO (ESQUERDA) -->
+            <div class="left-panel" id="dynamic-inst"></div>
+            
+            <!-- CHECKLISTS E AÇÕES DO PILOTO (DIREITA) -->
+            <div class="right-panel" id="checklist-scroll">
+                
+                <!-- 0. SYS -->
+                <div id="home" class="section active">
+                    <div class="sec-title">SYSTEM NOMINAL <span class="cl-pt">Monitorização Padrão</span></div>
+                    <div class="pilot-action">
+                        <strong>
+                            OPERAÇÃO NOMINAL 
+                            <div class="btn-group">
+                                <button class="help-btn" onclick="showHelp('sys_nominal', false)">?</button>
+                            </div>
+                        </strong>
+                        Todos os parâmetros dentro dos limites verdes. Nenhuma ação requerida.
+                    </div>
+                    
+                    <div class="sec-title" style="margin-top: 30px;">EMERGENCY PROTOCOL <span class="cl-pt">Protocolo de Emergência</span></div>
+                    <div class="pilot-action redundancy">
+                        <strong>
+                            REGRAS GERAIS DE VOO 
+                            <div class="btn-group">
+                                <button class="help-btn gray" onclick="showHelp('aviate', false)">?</button>
+                            </div>
+                        </strong>
+                        1. AVIATE (Manter o controle da aeronave)<br>
+                        2. NAVIGATE (Selecionar área de pouso)<br>
+                        3. COMMUNICATE (Declarar emergência 121.5)
+                    </div>
+
+                    <!-- DOORS OPEN -->
+                    <div class="sec-title amber" style="margin-top: 40px;">DOORS OPEN <span class="cl-pt">Portas Destravadas</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('doors_speed', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('doors_land', true)">R</button>
+                            </div>
+                        </strong>
+                        Indica que uma ou mais portas não estão travadas. O piloto deve reduzir a velocidade para evitar danos estruturais.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AIRSPEED <button class="help-btn" onclick="showHelp('doors_speed', false)">?</button></span><span class="cl-action amber">&lt; 90 KIAS</span></div>
+                            <span class="cl-pt">Velocidade - REDUZIR PARA MENOS DE 90 NÓS</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 1. ENGINE -->
+                <div id="engine" class="section">
+                    <div class="sec-title red">N1 &lt; 51% (ENGINE OUT) <span class="cl-pt">Falha Total de Motor</span></div>
+                    <div class="pilot-action red">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn red" onclick="showHelp('eng_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('eng_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        1. COLETIVO: Reduzir instantaneamente.<br>
+                        2. PEDAIS: Ajustar para compensar guinada à esquerda.<br>
+                        3. VELOCIDADE: Estabilizar autorrotação em 80 KIAS.
+                    </div>
+                    
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">COLLECTIVE PITCH <button class="help-btn" onclick="showHelp('collective', false)">?</button></span><span class="cl-action red">REDUCE</span></div>
+                            <span class="cl-pt">Passo Coletivo - REDUZIR IMEDIATAMENTE</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">YAW CONTROL (PEDALS) <button class="help-btn" onclick="showHelp('pedals', false)">?</button></span><span class="cl-action">ADJUST</span></div>
+                            <span class="cl-pt">Pedais - AJUSTAR para manter direção</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">ROTOR SPEED (NR) <button class="help-btn" onclick="showHelp('nr_limit', false)">?</button></span><span class="cl-action">90 - 110%</span></div>
+                            <span class="cl-pt">Rotação do Rotor (NR) - MONITORIZAR</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AIRSPEED <button class="help-btn" onclick="showHelp('autorot', false)">?</button></span><span class="cl-action">80 KIAS</span></div>
+                            <span class="cl-pt">Velocidade de Planeio - MANTER</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">ENGINE THROTTLE <button class="help-btn red" onclick="showHelp('throttle', false)">?</button></span><span class="cl-action red">OFF</span></div>
+                            <span class="cl-pt">Manete do Motor - CORTAR ANTES DO POUSO</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title red" style="margin-top: 40px;">ENG OIL PRESS <span class="cl-pt">Pressão Óleo Baixa</span></div>
+                    <div class="pilot-action red">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn redundancy" onclick="showHelp('oil_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Perda de pressão de óleo pode levar ao travamento iminente do motor. Monitorizar TRQ; preparar para autorrotação. Pousar o mais breve possível.
+                    </div>
+
+                    <!-- MEC OPN INSERIDO -->
+                    <div class="sec-title amber" style="margin-top: 40px;">MEC OPN / PLA POS <span class="cl-pt">Controlo de Motor Manual</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('mec_opn', false)">?</button>
+                            </div>
+                        </strong>
+                        O governador automático (FCU) falhou ou a manete está fora de "FLIGHT". O piloto passa a controlar a potência (N1/NR) diretamente girando a manete. Movimentar a Twist Grip suavemente. Pousar o mais breve possível.
+                    </div>
+                </div>
+
+                <!-- 2. FIRE -->
+                <div id="fire" class="section">
+                    <div class="sec-title red">ENGINE FIRE IN FLIGHT <span class="cl-pt">Fogo no motor em voo</span></div>
+                    <div class="pilot-action red">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn red" onclick="showHelp('fire_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('fire_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Entrar em autorrotação. Após estabilizar, <strong>cortar a manete (OFF)</strong> e fechar a <strong>válvula de combustível</strong>. Pousar de imediato.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AUTOROTATION <button class="help-btn" onclick="showHelp('autorot', false)">?</button></span><span class="cl-action">ENTER</span></div>
+                            <span class="cl-pt">Autorrotação - INICIAR</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">ENGINE THROTTLE <button class="help-btn red" onclick="showHelp('throttle', false)">?</button></span><span class="cl-action red">OFF</span></div>
+                            <span class="cl-pt">Manete do Motor - CORTAR</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">FUEL VALVE <button class="help-btn red" onclick="showHelp('fuelvalve', false)">?</button></span><span class="cl-action red">CLOSED</span></div>
+                            <span class="cl-pt">Válvula de Combustível - FECHAR</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 3. FUEL -->
+                <div id="fuel" class="section">
+                    <div class="sec-title amber">FUEL PUMP FAILURE <span class="cl-pt">Falha de Bomba de Combustível</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('fuel_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('fuel_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        O sistema elétrico é redundante. Desligar a bomba afetada isola possíveis curtos. A bomba redundante assume a pressão.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">SINGLE PUMP FAIL (1 OR 2) <button class="help-btn" onclick="showHelp('single_pump', false)">?</button></span><span class="cl-action amber">SW OFF</span></div>
+                            <span class="cl-pt">Falha Única: A bomba operante assume. Desligar a falha.</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">FUEL PRESSURE <button class="help-btn" onclick="showHelp('fuel_press', false)">?</button></span><span class="cl-action">MONITOR</span></div>
+                            <span class="cl-pt">Pressão de Combustível (EDU) - MONITORIZAR</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">DUAL PUMP FAIL (1 AND 2) <button class="help-btn red" onclick="showHelp('dual_pump', false)">?</button></span><span class="cl-action red">&lt; 6000 FT</span></div>
+                            <span class="cl-pt">Falha Dupla: A bomba mecânica fará a sucção. Descer abaixo de 6000 pés!</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title amber" style="margin-top: 40px;">XFER PUMP <span class="cl-pt">Bomba de Transferência</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('xfer_pump', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('xfer_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Falha na bomba que equaliza os tanques. Monitorizar desbalanceamento de combustível.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">XFER PUMP <button class="help-btn" onclick="showHelp('xfer_pump', false)">?</button></span><span class="cl-action amber">MONITOR</span></div>
+                            <span class="cl-pt">Bomba de Transferência - Monitorar balanceamento</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 4. ELEC -->
+                <div id="elec" class="section">
+                    <div class="sec-title red">BATT TEMP HOT <span class="cl-pt">Sobreaquecimento da Bateria</span></div>
+                    <div class="pilot-action red">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn red" onclick="showHelp('elec_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('elec_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        O sobreaquecimento da bateria exige o corte imediato da mesma (OFF) para evitar fuga térmica e incêndio estrutural.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">BATT SWITCH <button class="help-btn" onclick="showHelp('batt_off', false)">?</button></span><span class="cl-action red">OFF</span></div>
+                            <span class="cl-pt">Interruptor da Bateria - DESLIGAR</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">LAND AS SOON AS POSSIBLE <button class="help-btn" onclick="showHelp('land_soon', false)">?</button></span><span class="cl-action amber">NEAREST</span></div>
+                            <span class="cl-pt">Pousar o mais breve possível</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title amber" style="margin-top: 40px;">DC GEN <span class="cl-pt">Falha do Gerador</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('dc_gen', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('dc_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Sem gerador primário, a aeronave será alimentada pela bateria. Tentar efetuar RESET.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">DC GEN <button class="help-btn" onclick="showHelp('dc_gen', false)">?</button></span><span class="cl-action">RESET</span></div>
+                            <span class="cl-pt">Gerador DC - Efetuar Reset do interruptor</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title amber" style="margin-top: 40px;">INV 1-2 OFF <span class="cl-pt">Falha de Inversores AC</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('inv_off', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('inv_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Perda de energia de corrente alternada. Instrumentos dependentes de AC irão falhar. Executar RESET.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">INV 1-2 OFF <button class="help-btn" onclick="showHelp('inv_off', false)">?</button></span><span class="cl-action">RESET</span></div>
+                            <span class="cl-pt">Inversores - Reset do interruptor correspondente</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 5. TAIL -->
+                <div id="tail" class="section">
+                    <div class="sec-title amber">T/R CONTROL LOSS <span class="cl-pt">Perda de Controle Rotor Cauda</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('tail_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('tail_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        A perda de controle direcional exige a manutenção de velocidade aerodinâmica (60-70 KIAS) para estabilização da cauda.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AIRSPEED <button class="help-btn" onclick="showHelp('tr_speed', false)">?</button></span><span class="cl-action">60-70 KIAS</span></div>
+                            <span class="cl-pt">Velocidade - Manter 60 a 70 KIAS</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">COLLECTIVE (AUTOROT) <button class="help-btn" onclick="showHelp('collective', false)">?</button></span><span class="cl-action">REDUCE</span></div>
+                            <span class="cl-pt">Coletivo - REDUZIR para autorrotação</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 6. HYD -->
+                <div id="hyd" class="section">
+                    <div class="sec-title amber">HYDRAULIC FAILURE <span class="cl-pt">Falha do Sistema Hidráulico</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('hyd_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('hyd_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Isolar o sistema hidráulico avariado e reduzir a velocidade para atenuar as forças aerodinâmicas nos comandos manuais.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AIRSPEED <button class="help-btn" onclick="showHelp('hyd_speed', false)">?</button></span><span class="cl-action">&lt; 90 KIAS</span></div>
+                            <span class="cl-pt">Velocidade - REDUZIR ABAIXO DE 90 NÓS</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">FAILED SYSTEM SW <button class="help-btn" onclick="showHelp('hyd_fail', false)">?</button></span><span class="cl-action amber">OFF</span></div>
+                            <span class="cl-pt">Sistema Falho - DESLIGAR (OFF) no Overhead</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title amber" style="margin-top: 40px;">SAS 1-2 <span class="cl-pt">Falha do SAS</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('sas_fail', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('sas_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Falha do Sistema de Aumento de Estabilidade. O helicóptero exigirá pilotagem manual para manter o voo estável.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">SAS 1-2 <button class="help-btn" onclick="showHelp('sas_fail', false)">?</button></span><span class="cl-action">MANUAL FLIGHT</span></div>
+                            <span class="cl-pt">Sistema SAS - Preparar para Voo Manual</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 7. IDS -->
+                <div id="ids" class="section">
+                    <div class="sec-title cyan">EDU FAILURE <span class="cl-pt">Falha do Ecrã Eletrônico</span></div>
+                    <div class="pilot-action cyan">
+                        <strong>
+                            AÇÃO DE MEMÓRIA (IMEDIATA) 
+                            <div class="btn-group">
+                                <button class="help-btn" onclick="showHelp('ids_imediata', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('ids_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Desligar o ecrã inoperante e colocar o ecrã saudável em modo REVERSIONARY.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">AFFECTED EDU SW <button class="help-btn amber" onclick="showHelp('edu_fail', false)">?</button></span><span class="cl-action amber">OFF</span></div>
+                            <span class="cl-pt">Interruptor do Ecrã Falho - OFF</span>
+                        </li>
+                        <li>
+                            <div class="cl-row"><span class="cl-item">HEALTHY EDU <button class="help-btn" onclick="showHelp('reversionary', false)">?</button></span><span class="cl-action cyan">REVERSIONARY</span></div>
+                            <span class="cl-pt">Ecrã Saudável - Selecionar MODO REVERSIONÁRIO</span>
+                        </li>
+                    </ul>
+
+                    <div class="sec-title amber" style="margin-top: 40px;">VG 1-2 <span class="cl-pt">Falha de Vertical Gyro</span></div>
+                    <div class="pilot-action amber">
+                        <strong>
+                            AÇÃO IMEDIATA DO PILOTO 
+                            <div class="btn-group">
+                                <button class="help-btn amber" onclick="showHelp('vg_fail', false)">?</button>
+                                <button class="help-btn redundancy" onclick="showHelp('vg_redundancia', true)">R</button>
+                            </div>
+                        </strong>
+                        Perda do sinal de referência de atitude. O PFD exibirá bandeiras vermelhas. Não confiar no horizonte digital.
+                    </div>
+                    <ul class="checklist">
+                        <li>
+                            <div class="cl-row"><span class="cl-item">VG 1-2 <button class="help-btn" onclick="showHelp('vg_fail', false)">?</button></span><span class="cl-action">CROSS-CHECK</span></div>
+                            <span class="cl-pt">Vertical Gyro - Cruzamento de dados com Standby</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTÕES BEZEL DIREITOS -->
+    <div class="bezel-nav">
+        <div class="btn-wrapper right" id="desk-4" onclick="navTo('elec', 4)"><div class="bezel-btn"></div><span class="btn-label">ELC</span></div>
+        <div class="btn-wrapper right" id="desk-5" onclick="navTo('tail', 5)"><div class="bezel-btn"></div><span class="btn-label">T/R</span></div>
+        <div class="btn-wrapper right" id="desk-6" onclick="navTo('hyd', 6)"><div class="bezel-btn"></div><span class="btn-label">HYD</span></div>
+        <div class="btn-wrapper right" id="desk-7" onclick="navTo('ids', 7)"><div class="bezel-btn"></div><span class="btn-label">IDS</span></div>
+    </div>
+</div>
+
+<!-- NAVEGAÇÃO MÓVEL (BOTÕES NATIVOS) -->
+<nav class="mobile-nav">
+    <button class="mob-btn active" id="mob-0" onclick="navTo('home', 0)">SYS</button>
+    <button class="mob-btn" style="color:var(--edu-red)" id="mob-1" onclick="navTo('engine', 1)">ENG</button>
+    <button class="mob-btn" style="color:var(--edu-red)" id="mob-2" onclick="navTo('fire', 2)">FIR</button>
+    <button class="mob-btn" style="color:var(--edu-amber)" id="mob-3" onclick="navTo('fuel', 3)">FUL</button>
+    <button class="mob-btn" style="color:var(--edu-red)" id="mob-4" onclick="navTo('elec', 4)">ELC</button>
+    <button class="mob-btn" style="color:var(--edu-amber)" id="mob-5" onclick="navTo('tail', 5)">T/R</button>
+    <button class="mob-btn" style="color:var(--edu-amber)" id="mob-6" onclick="navTo('hyd', 6)">HYD</button>
+    <button class="mob-btn" style="color:var(--edu-cyan)" id="mob-7" onclick="navTo('ids', 7)">IDS</button>
+</nav>
+
+<!-- MODAL DE AJUDA / REDUNDÂNCIA -->
+<div id="help-modal" class="modal-overlay">
+    <div class="modal-box" id="modal-content-box">
+        <h3 id="help-title">TÍTULO</h3>
+        <p id="help-text">Texto de explicação da manobra.</p>
+        <button class="modal-close" onclick="closeHelp()">FECHAR E RETORNAR</button>
+    </div>
+</div>
+
+<script>
+    function startSimulator() {
+        const overlay = document.getElementById('overview');
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; }, 300); 
+    }
+
+    // --- Base de Dados (Porquês e Redundâncias) ---
+    const helpDB = {
+        /* Instrumentos EDU */
+        'n1': { title: 'N1 (GERADOR DE GÁS)', text: 'Rotação do compressor. Em operação normal reflete a potência entregue. Uma queda súbita indica apagamento (flameout) ou falha crítica do motor.' },
+        'nr': { title: 'NR (ROTOR SPEED)', text: 'Velocidade do Rotor Principal. O AW119 deve manter a NR estável (101-102%). Em emergência, a gestão do coletivo é vital para mantê-la entre 90% e 110%.' },
+        'trq': { title: 'TRQ (TORQUE)', text: 'Força torcional para o mastro. Num corte de motor, cai imediatamente a zero, causando a guinada à esquerda da aeronave.' },
+        'itt': { title: 'ITT (TEMPERATURA)', text: 'Temperatura entre a secção do compressor e as turbinas. Num cenário de fogo, a ITT pode disparar de forma anómala, indicando danos graves.' },
+        
+        /* SYS */
+        'sys_nominal': { title: 'STATUS NOMINAL', text: 'Sem falhas ativas. Todos os sistemas dentro dos limites estipulados pelo fabricante. Monitorização contínua.' },
+        'aviate': { title: '1. AVIATE (VOAR A AERONAVE)', text: 'A regra de ouro em emergência: nunca deixe de pilotar a máquina enquanto tenta diagnosticar o problema. O controle do passo e atitude têm prioridade.' },
+        'doors_speed': { title: 'REDUÇÃO DE VELOCIDADE', text: 'Com a indicação de DOORS OPEN, a aerodinâmica altera. Reduzir para menos de 90 KIAS previne o arranque estrutural da porta pelo vento.' },
+        'doors_land': { title: 'REDUNDÂNCIA - PORTAS', text: 'Se a porta não puder ser trancada em voo (ou colocar em risco o rotor de cauda), o piloto deve efetuar um pouso seguro para fechar a porta no solo.' },
+
+        /* ENG */
+        'eng_imediata': { title: 'AÇÃO IMEDIATA - MOTOR', text: 'A descida imediata do coletivo previne a queda catastrófica das RPM do rotor (NR). A aplicação de pedal direito compensa o torque anulado.' },
+        'eng_redundancia': { title: 'AÇÕES DE REDUNDÂNCIA (MOTOR)', text: '1. AIR RESTART: Se a falha não for estrutural e houver altitude, tentar religar o motor.\n2. CORTE: Se não voltar, manete em OFF e fechar Válvula de Combustível antes do pouso.' },
+        'collective': { title: 'REDUÇÃO DO COLETIVO', text: 'Ao perder o motor, o rotor deixa de receber força. Baixar o coletivo reduz o arrasto das pás, mantendo-as a girar pelo vento ascendente.' },
+        'pedals': { title: 'AJUSTE DE PEDAIS', text: 'Aplica-se pedal direito imediato para manter a aeronave alinhada em voo após a perda do anti-torque.' },
+        'nr_limit': { title: 'LIMITES NR', text: 'Em autorrotação: menos de 90% perde-se sustentação estrutural para o "flare" no solo. Mais de 110% cria risco de overspeed no cubo do rotor.' },
+        'autorot': { title: 'AUTORROTAÇÃO', text: 'Manobra de emergência. A velocidade de 80 KIAS é a melhor razão de planeio (Vy) do AW119.' },
+        'throttle': { title: 'CORTE DE MANETE', text: 'Fecha a FCU. Na autorrotação, o corte antes do solo evita um acoplamento brusco caso o motor tente voltar à vida subitamente.' },
+        'oil_redundancia': { title: 'REDUNDÂNCIA - ENG OIL', text: 'Pressão de óleo nula leva ao engripamento mecânico rápido. Assuma a perda do motor num curto espaço de tempo e inicie a navegação para um local de pouso imediato.' },
+        'mec_opn': { title: 'CONTROLO MANUAL (MEC OPN)', text: 'O governador automático de combustível falhou. O piloto tem de controlar o fluxo de combustível rodando manualmente a Twist Grip para evitar overspeed ou underspeed do rotor.' },
+
+        /* FIR */
+        'fire_imediata': { title: 'AÇÃO IMEDIATA - FOGO', text: 'O alarme FIRE exige corte do suprimento. Iniciar autorrotação retira a carga de esforço térmico do motor, enquanto fechar a válvula isola o fogo.' },
+        'fire_redundancia': { title: 'AÇÕES DE REDUNDÂNCIA (FOGO)', text: '1. ISOLAMENTO ELÉTRICO: Pousar imediatamente e desligar a Bateria (BATT OFF) pouco antes do toque no solo para evitar faíscas que reacendam o combustível.\n2. VENTILAÇÃO: Desligar o aquecimento.' },
+        'fuelvalve': { title: 'VÁLVULA DE COMBUSTÍVEL', text: 'A Shut-Off Valve fica entre os tanques e o motor. Fechá-la cria uma barreira física que impede o incêndio de se alimentar do tanque principal.' },
+
+        /* FUL */
+        'fuel_imediata': { title: 'AÇÃO IMEDIATA - BOMBAS', text: 'O sistema elétrico é redundante. Desligar a bomba afetada isola curtos-circuitos. A bomba saudável mantém a pressão do combustível.' },
+        'fuel_redundancia': { title: 'AÇÕES DE REDUNDÂNCIA (BOMBAS)', text: '1. CROSS-CHECK: Confirmar no EDU se a pressão estabilizou.\n2. FALHA DUPLA: O motor fará "Suction Feed". Descer abaixo de 6000 FT é obrigatório para evitar cavitação/bolhas de ar na linha.' },
+        'single_pump': { title: 'FALHA DE BOMBA ÚNICA', text: 'Com uma bomba inoperante, a bomba redundante fornece o volume necessário. Desligar o interruptor protege o circuito elétrico.' },
+        'dual_pump': { title: 'FALHA DUPLA (1 E 2)', text: 'A bomba mecânica do motor está a operar por sucção. A altitude deve ser mantida abaixo de 6000 pés para evitar apagamento do motor por cavitação.' },
+        'fuel_press': { title: 'MONITORIZAR PRESSÃO', text: 'Uma queda contínua na pressão indica falha da segunda bomba ou fuga grave na linha, exigindo descida imediata.' },
+        'xfer_pump': { title: 'BOMBA DE TRANSFERÊNCIA', text: 'A bomba XFER move o combustível entre os tanques frontal e traseiro. Em caso de falha, monitorizar a simetria de combustível.' },
+        'xfer_redundancia': { title: 'REDUNDÂNCIA - XFER', text: 'Se o desbalanceamento for severo, o piloto deve abrir a Válvula Cruzada (X-FEED) para permitir que as bombas principais nivelem o sistema.' },
+
+        /* ELC */
+        'elec_imediata': { title: 'AÇÃO IMEDIATA - BATERIA', text: 'BATT TEMP significa "Thermal Runaway" (Fuga Térmica). A bateria aquecerá até explodir. O corte imediato interrompe o ciclo de sobrecarga.' },
+        'elec_redundancia': { title: 'REDUNDÂNCIA (ELÉTRICA)', text: '1. LOAD SHEDDING: Sem gerador e só com bateria, desligar luzes, ar condicionado e aviónicos não essenciais para garantir energia vital até ao pouso.' },
+        'batt_off': { title: 'BATT SWITCH OFF', text: 'Cortar a bateria isola a fonte térmica, impedindo o alastramento do fogo para o compartimento traseiro.' },
+        'land_soon': { title: 'POUSO O MAIS BREVE POSSÍVEL', text: 'Risco iminente de dano estrutural por fogo químico.' },
+        'dc_gen': { title: 'FALHA DE GERADOR', text: 'O gerador DC principal parou de fornecer carga. O piloto deve tentar um RESET para recuperar o sistema elétrico primário.' },
+        'dc_redundancia': { title: 'REDUNDÂNCIA - GERADOR', text: 'Se o RESET falhar, a aeronave opera na Bateria (limite de 30 min). Executar Load Shedding rigoroso.' },
+        'inv_off': { title: 'FALHA DE INVERSOR AC', text: 'Os inversores convertem DC para AC. Instrumentos que requerem AC (giroscópios clássicos) irão falhar. Tentar resetar a chave do inversor.' },
+        'inv_redundancia': { title: 'REDUNDÂNCIA - INVERSORES', text: 'Sem energia AC primária, voar referenciando instrumentos de Standby e condições visuais (VMC).' },
+
+        /* TAIL */
+        'tail_imediata': { title: 'AÇÃO IMEDIATA - CAUDA', text: 'Sem rotor de cauda, a aeronave guina descontroladamente. Manter 60-70 KIAS faz o vento colidir com as derivas verticais, mantendo o nariz reto.' },
+        'tail_redundancia': { title: 'AÇÕES DE REDUNDÂNCIA (CAUDA)', text: 'CORTE DE MOTOR: Pousar com o motor puxando torque sem rotor de cauda faz a aeronave girar violentamente no toque. Cortar o motor ANTES do solo garante um pouso seguro em autorrotação.' },
+        'tr_speed': { title: 'VELOCIDADE (60-70 KIAS)', text: 'Velocidade crítica para gerar o efeito "Cata-vento" (weathervaning) nos estabilizadores traseiros.' },
+
+        /* HYD */
+        'hyd_imediata': { title: 'AÇÃO IMEDIATA - HIDRÁULICA', text: 'Isolar o sistema hidráulico avariado impede a perda do fluido para toda a aeronave. A velocidade abaixo de 90 KIAS alivia o peso aerodinâmico nos comandos manuais.' },
+        'hyd_redundancia': { title: 'AÇÕES DE REDUNDÂNCIA (SAS/HYD)', text: '1. VERIFICAÇÃO SAS: Se o SAS 1 falhar, o piloto deve recorrer ao SAS 2 ou pilotar manualmente. O voo é seguro, apenas mais cansativo fisicamente.\n2. Verificar disjuntores (circuit breakers).' },
+        'hyd_speed': { title: 'REDUÇÃO DE VELOCIDADE (< 90 KIAS)', text: 'Facilita os movimentos do cíclico e do coletivo operados apenas pelo sistema hidráulico que sobreviveu.' },
+        'hyd_fail': { title: 'SISTEMA FALHO OFF', text: 'Desligar o interruptor HID 1 ou 2 isola as válvulas solenoides do circuito que está vazando fluido.' },
+        'sas_fail': { title: 'FALHA DO SAS', text: 'O Stability Augmentation System parou de estabilizar os eixos. O piloto deve assumir a pilotagem 100% manual (Hands-on).' },
+        'sas_redundancia': { title: 'REDUNDÂNCIA - SAS', text: 'Alternar para o canal SAS 2 (se aplicável). Em voo manual, evitar movimentos bruscos nos comandos, pois o amortecimento artificial está inoperante.' },
+
+        /* IDS */
+        'ids_imediata': { title: 'AÇÃO IMEDIATA - EDU', text: 'A função REVERSIONARY combina as informações de motor (TRQ/N1/NR) com as do voo e navegação na tela que ainda funciona, evitando cegueira de instrumentos.' },
+        'ids_redundancia': { title: 'REDUNDÂNCIA - STANDBY', text: 'CROSS-CHECK: Se o Vertical Gyro digital falhar, o piloto é obrigado a olhar para o horizonte natural e usar o Giroscópio Analógico de emergência para manter a atitude.' },
+        'edu_fail': { title: 'CORTE DE ECRÃ INOPERANTE', text: 'Desligar o ecrã avariado previne curtos-circuitos no barramento de aviônicos que poderiam desativar os ecrãs saudáveis restantes.' },
+        'reversionary': { title: 'MODO REVERSIONÁRIO', text: 'Aperta as interfaces gráficas num formato condensado (Composite Page) que não deixa faltar nenhuma métrica essencial para o voo seguro.' },
+        'vg_fail': { title: 'FALHA DE VERTICAL GYRO', text: 'A indicação de atitude no ecrã PFD torna-se não confiável (Bandeiras Vermelhas). Não seguir a indicação do ecrã.' },
+        'vg_redundancia': { title: 'REDUNDÂNCIA - VERTICAL GYRO', text: 'Tentar efetuar RESET no interruptor de força do VG. Manter o voo reto e nivelado visualmente enquanto os giroscópios se tentam realinhar no espaço.' }
+    };
+
+    function showHelp(id, isRedundancy) {
+        if(!helpDB[id]) return;
+        
+        const modalBox = document.getElementById('modal-content-box');
+        document.getElementById('help-title').innerText = helpDB[id].title;
+        document.getElementById('help-text').innerText = helpDB[id].text;
+        
+        if(isRedundancy) {
+            modalBox.classList.add('redundancy-theme');
+        } else {
+            modalBox.classList.remove('redundancy-theme');
+        }
+        
+        document.getElementById('help-modal').classList.add('active');
+    }
+
+    function closeHelp() {
+        document.getElementById('help-modal').classList.remove('active');
+    }
+
+    // --- Renderização Dinâmica do Painel Esquerdo (Instrumentos) ---
+    function renderEDU(casMessages, gauges, sysData) {
+        let casHtml = casMessages.map(m => `<div class="edu-cas-msg ${m.type}">${m.text}</div>`).join('');
+        if(casHtml === '') casHtml = '<div class="edu-cas-msg cyan">SYS NORMAL</div>';
+
+        let extraSysHtml = '';
+        if(sysData.extra) {
+            sysData.extra.forEach(item => {
+                extraSysHtml += `<div class="edu-row"><span class="edu-lbl">${item.lbl}</span><span class="edu-val ${item.cls}">${item.val}</span></div>`;
+            });
+        }
+
+        return `
+            <div class="edu-layout">
+                <div class="edu-cas">${casHtml}</div>
+                
+                <div class="edu-section">
+                    <div class="edu-title">ENGINE & ROTOR</div>
+                    <div class="edu-row"><span class="edu-lbl">N1 % <button class="help-btn edu-help" onclick="showHelp('n1', false)">?</button></span><span class="edu-val ${gauges.n1.cls}">${gauges.n1.val}</span></div>
+                    <div class="edu-row"><span class="edu-lbl">NR % <button class="help-btn edu-help" onclick="showHelp('nr', false)">?</button></span><span class="edu-val ${gauges.nr.cls}">${gauges.nr.val}</span></div>
+                    <div class="edu-row"><span class="edu-lbl">TRQ % <button class="help-btn edu-help" onclick="showHelp('trq', false)">?</button></span><span class="edu-val ${gauges.trq.cls}">${gauges.trq.val}</span></div>
+                    <div class="edu-row"><span class="edu-lbl">ITT °C <button class="help-btn edu-help" onclick="showHelp('itt', false)">?</button></span><span class="edu-val ${gauges.itt.cls}">${gauges.itt.val}</span></div>
+                </div>
+
+                <div class="edu-section">
+                    <div class="edu-title">FUEL & SYSTEMS</div>
+                    <div class="edu-row"><span class="edu-lbl">FUEL QTY</span><span class="edu-val">${sysData.fuelQty} KG</span></div>
+                    <div class="edu-row"><span class="edu-lbl">FUEL P</span><span class="edu-val ${sysData.fuelP.cls}">${sysData.fuelP.val} PSI</span></div>
+                    ${extraSysHtml}
+                    <div class="edu-row" style="margin-top:12px; border-top:1px dashed #333; padding-top:8px;">
+                        <span class="edu-lbl">FLT HR</span><span class="edu-val" style="font-size: 20px;">${sysData.fltHr}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    const secList = ['home', 'engine', 'fire', 'fuel', 'elec', 'tail', 'hyd', 'ids'];
+    const currentFltHr = "1425.6"; 
+
+    const instData = {
+        'home': renderEDU([], { n1: {val: '98.5', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '75.0', cls: ''}, itt: {val: '680', cls: ''} }, { fuelQty: '480', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr }),
+        'engine': renderEDU([{text: 'ENG OUT', type: 'red'}, {text: 'ENG OIL PRESS', type: 'red'}, {text: 'MEC OPN', type: 'amber'}], { n1: {val: '48.2', cls: 'red'}, nr: {val: '88.5', cls: 'red'}, trq: {val: '00.0', cls: 'red'}, itt: {val: '350', cls: ''} }, { fuelQty: '475', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr }),
+        'fire': renderEDU([{text: 'ENG FIRE', type: 'red'}, {text: 'FIRE DET', type: 'red'}], { n1: {val: '95.0', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '60.0', cls: ''}, itt: {val: '980', cls: 'red'} }, { fuelQty: '470', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr }),
+        'fuel': renderEDU([{text: 'FUEL PUMP 1', type: 'amber'}, {text: 'XFER PUMP', type: 'amber'}], { n1: {val: '98.5', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '75.0', cls: ''}, itt: {val: '680', cls: ''} }, { fuelQty: '468', fuelP: {val: '8.5', cls: 'amber'}, fltHr: currentFltHr }),
+        'elec': renderEDU([{text: 'BATT TEMP', type: 'red'}, {text: 'DC GEN', type: 'amber'}, {text: 'INV 1-2 OFF', type: 'amber'}], { n1: {val: '98.5', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '75.0', cls: ''}, itt: {val: '680', cls: ''} }, { fuelQty: '465', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr, extra: [{lbl: 'BAT °C', val: '72.0', cls: 'red'}, {lbl: 'GEN A', val: '0', cls: 'red'}] }),
+        'tail': renderEDU([{text: 'T/R CHIP', type: 'amber'}], { n1: {val: '98.5', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '75.0', cls: ''}, itt: {val: '680', cls: ''} }, { fuelQty: '460', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr }),
+        'hyd': renderEDU([{text: 'SERVO 1', type: 'amber'}, {text: 'SAS 1-2', type: 'amber'}], { n1: {val: '98.5', cls: ''}, nr: {val: '102.0', cls: ''}, trq: {val: '75.0', cls: ''}, itt: {val: '680', cls: ''} }, { fuelQty: '455', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr, extra: [{lbl: 'SYS 1 PSI', val: '0', cls: 'red'}, {lbl: 'SYS 2 PSI', val: '1500', cls: ''}] }),
+        'ids': renderEDU([{text: 'REVERSIONARY', type: 'cyan'}, {text: 'VG 1-2', type: 'amber'}], { n1: {val: 'COMBINED', cls: 'cyan'}, nr: {val: 'COMBINED', cls: 'cyan'}, trq: {val: 'COMBINED', cls: 'cyan'}, itt: {val: '---', cls: ''} }, { fuelQty: '450', fuelP: {val: '12.5', cls: ''}, fltHr: currentFltHr, extra: [{lbl: 'EDU 2', val: 'FAIL', cls: 'red'}] })
+    };
+
+    window.navTo = function(secId, idx) {
+        const rightPanel = document.getElementById('checklist-scroll');
+        if(rightPanel) rightPanel.scrollTop = 0;
+        
+        secList.forEach(id => {
+            const sec = document.getElementById(id);
+            if(sec) sec.classList.remove('active');
+        });
+        
+        const activeSec = document.getElementById(secId);
+        if(activeSec) activeSec.classList.add('active');
+        
+        for (let i = 0; i < 8; i++) {
+            const dBtn = document.getElementById('desk-' + i);
+            if (dBtn) dBtn.classList.remove('active');
+            const mBtn = document.getElementById('mob-' + i);
+            if (mBtn) mBtn.classList.remove('active');
+        }
+        
+        const activeDesk = document.getElementById('desk-' + idx);
+        if (activeDesk) activeDesk.classList.add('active');
+        const activeMob = document.getElementById('mob-' + idx);
+        if (activeMob) activeMob.classList.add('active');
+        
+        const instPanel = document.getElementById('dynamic-inst');
+        if (instPanel && instData[secId]) {
+            instPanel.innerHTML = instData[secId];
+        }
+    };
+    
+    // Iniciar
+    window.navTo('home', 0);
+</script>
+</body>
+</html>
